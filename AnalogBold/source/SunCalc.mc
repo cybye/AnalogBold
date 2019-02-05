@@ -111,6 +111,7 @@ class SunCalc {
 
         var ds = J0 + (Math.acos(x) - lng) / PI2 + n - 1.1574e-5 * 68;
 
+
         var Jset = J2000 + ds + 0.0053 * sinM - 0.0069 * sin2L;
         if (what > NOON) {
             return fromJulian(Jset);

@@ -8,6 +8,7 @@ using Toybox.Time.Gregorian as Calendar;
 using Toybox.WatchUi as Ui;
 using Toybox.Position as Position;
 using Toybox.Activity as ActI;
+using Toybox.Position as Pos;
 
 // This implements an analog watch face
 // Original design by Austen Harbour
@@ -16,8 +17,6 @@ class AnalogView extends Ui.WatchFace
     var isAwake = true;
     var screenShape;
     var sc;
-    var sunrise_moment;
-    var sunset_moment;
     var app;
     var bitmap;
     
@@ -31,6 +30,7 @@ class AnalogView extends Ui.WatchFace
     var hand2;
     var hand3;
     var hand4;
+    var hand5;
     
     var offscreenBuffer;
     var curClip;
@@ -41,6 +41,7 @@ class AnalogView extends Ui.WatchFace
 
     function initialize() {
         WatchFace.initialize();
+        
         screenShape = Sys.getDeviceSettings().screenShape;
        partialUpdatesAllowed = ( Toybox.WatchUi.WatchFace has :onPartialUpdate );
         // sun dates      
@@ -90,11 +91,15 @@ class AnalogView extends Ui.WatchFace
          hand4 = [[-(_width / 2),-_length],[_width / 2, -_length],  [0, -_length+10]];
          
          
+         _length= centerX;
+         _width= 10;
+         hand5 = [[-(_width / 2),-_length],[_width / 2, -_length],  [0, -_length+8]];
+         
          cachedSeconds = cacheSeconds();
          
          // offscreen
          // If this device supports BufferedBitmap, allocate the buffers we use for drawing
-        if(Toybox.Graphics has :BufferedBitmap) {
+        if(Gfx has :BufferedBitmap) {
             // Allocate a full screen size buffer to draw
             // the background image of the watchface.  This is used to facilitate blanking
             // the second hand during partial updates of the display
@@ -229,6 +234,13 @@ class AnalogView extends Ui.WatchFace
     }
 
 
+    // draw a hand (tick mark) for a given time
+	function drawHand5(tdc, sunt, color, hand) {
+ 		var sun = (((sunt.hour % 12) * 60) + sunt.min);
+        sun = sun / (12 * 60.0);
+        sun = sun * Math.PI * 2;
+        drawPolyAngle(tdc, hand, sun, color[0], color[1]);
+	}
 
 		// Draw the circle symbols on the watch
     // @param dc Device context
@@ -443,6 +455,9 @@ class AnalogView extends Ui.WatchFace
         	tdc.drawText(w2, 3*height/4, Gfx.FONT_SYSTEM_XTINY,  utcStr, Gfx.TEXT_JUSTIFY_CENTER);
         }
         
+         // Draw the hash marks
+        tdc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+	    drawCircles(tdc);
         
         // sun and so
         
@@ -460,46 +475,89 @@ class AnalogView extends Ui.WatchFace
 	           app.setProperty("location",[l[0],l[1]]);
 	        }
 	        loc = app.getProperty("location");
+	        if(loc == null ) {
+	        	var m = new Pos.Location(
+            { :latitude => 49.317304, :longitude => 6.7442780, :format => :degrees }
+            ).toRadians();
+	        	loc = m;
+	        }
+        }
+       
+        
+        if(loc != null) {
+			var latlon = loc;
+	        var color = [Gfx.COLOR_YELLOW, Gfx.COLOR_DK_BLUE];
+
+	        //var dawn_moment = sc.calculate(now, latlon, DAWN);
+	        var golden_hour_am =  sc.calculate(now, latlon, GOLDEN_HOUR_AM);	 			
+	    	var dusk_moment  = sc.calculate(now, latlon, DUSK);
+
+			 
+	    	
+	 		
+	 		var moment;
+	 		// System.println("gh " + dawn_moment.value() + " now "  + now.value() + " dusk " + dusk_moment.value());
+	 		
+	 		if(golden_hour_am.lessThan(now) && dusk_moment.greaterThan(now)) {
+	 		
+	 			var sunset_moment  = sc.calculate(now, latlon, SUNSET);
+	 			moment = sunset_moment;
+	 			var golden_hour =  sc.calculate(now, latlon, GOLDEN_HOUR_PM);	 			
+	 			var blue_hour   =  sc.calculate(now, latlon, BLUE_HOUR_PM);
+	 			
+	 			
+	 			
+	 		// System.println("golden " + golden_hour.value() + " blue " + blue_hour.value());
+	 		
+	 			var sunt = Time.Gregorian.info(sunset_moment, Time.FORMAT_SHORT);
+	 			var ght =  Time.Gregorian.info(golden_hour, Time.FORMAT_SHORT);
+	 			var bht =  Time.Gregorian.info(blue_hour, Time.FORMAT_SHORT);
+	 			var dt =  Time.Gregorian.info(dusk_moment, Time.FORMAT_SHORT);
+	 			
+	 			// System.println("blue " + bht.hour + ':' + bht.min + " golden " + ght.hour + ':' + ght.min + " sunt " + sunt.min);
+	 			
+	 			color[0] = Gfx.COLOR_BLUE;
+	 			drawHand5(tdc, bht, [Gfx.COLOR_BLUE, Gfx.COLOR_DK_BLUE], hand5); // dusk
+	 			drawHand5(tdc, ght, [Gfx.COLOR_YELLOW, Gfx.COLOR_DK_BLUE], hand5); // sunset
+	 			drawHand5(tdc, dt,[Gfx.COLOR_LT_GRAY, Gfx.COLOR_DK_BLUE], hand5); // sunset				
+	 			drawHand5(tdc, sunt,[Gfx.COLOR_ORANGE, Gfx.COLOR_DK_BLUE], hand4); // sunset	 
+	 			
+	 			
+	 		} else {
+		        var sunrise_moment = sc.calculate(now, latlon, SUNRISE);
+	 			moment = sunrise_moment;
+	 			
+	 			var dawn_moment = sc.calculate(now, latlon, DAWN);
+	 			//var golden_hour_am =  sc.calculate(now, latlon, GOLDEN_HOUR_AM);	 			
+	 			var blue_hour   =  sc.calculate(now, latlon, BLUE_HOUR_AM);
+	 		
+	 			var sunt = Time.Gregorian.info(sunrise_moment, Time.FORMAT_SHORT);
+	 			var ght =  Time.Gregorian.info(golden_hour_am, Time.FORMAT_SHORT);
+	 			var bht =  Time.Gregorian.info(blue_hour, Time.FORMAT_SHORT);
+	 			var dt =  Time.Gregorian.info(dawn_moment, Time.FORMAT_SHORT);
+	 			color[0] = Gfx.COLOR_BLUE;
+	 			drawHand5(tdc, bht, [Gfx.COLOR_BLUE, Gfx.COLOR_DK_BLUE], hand5); // dusk
+	 			drawHand5(tdc, ght, [Gfx.COLOR_YELLOW, Gfx.COLOR_DK_BLUE], hand5); // sunset
+	 			drawHand5(tdc, dt,[Gfx.COLOR_LT_GRAY, Gfx.COLOR_DK_BLUE], hand5); // sunset	
+	 			drawHand5(tdc, sunt,[Gfx.COLOR_ORANGE, Gfx.COLOR_DK_BLUE], hand4); // sunset	 			
+	 			
+	 			// drawHand5(tdc, sunt, color);
+	 		}
+	 		
+	 		
+	 		
+	 	
+	 		
+	 		if(isAwake) {
+	 			var sunt = Time.Gregorian.info(moment, Time.FORMAT_SHORT);
+		 		tdc.setColor(color[0], Gfx.COLOR_TRANSPARENT);
+		 		var sunStr = sunt.hour.format("%02i") + ":" + sunt.min.format("%02i");
+		        tdc.drawText(w2, 3*height/4-20, Gfx.FONT_SYSTEM_XTINY,  sunStr, Gfx.TEXT_JUSTIFY_CENTER);
+	 		}
+        
         }
         
-        
-        var latlon;
-        var color = [Gfx.COLOR_YELLOW, Gfx.COLOR_DK_BLUE];
-        
-        if(loc == null) {
-        	latlon = [Math.toRadians(49.3d),Math.toRadians(6.7d)]; 
-        	color[1] = Gfx.COLOR_ORANGE;
-        } else {
-        	latlon = loc;
-		}
-		
-        sunrise_moment = sc.calculate(now, latlon, SUNRISE);
-    	sunset_moment  = sc.calculate(now, latlon, SUNSET);
- 		
- 		var sunt;
- 		if(sunrise_moment.lessThan(now) && sunset_moment.greaterThan(now)) {
- 			sunt = Time.Gregorian.info(sunset_moment, Time.FORMAT_SHORT);
- 			color[0] = Gfx.COLOR_BLUE;
- 		} else {
- 			sunt = Time.Gregorian.info(sunrise_moment, Time.FORMAT_SHORT);
- 		}
- 		
- 		var sun = (((sunt.hour % 12) * 60) + sunt.min);
-        sun = sun / (12 * 60.0);
-        sun = sun * Math.PI * 2;
-        drawHand4(tdc, sun, color);
- 		
- 		if(isAwake) {
-	 		tdc.setColor(color[0], Gfx.COLOR_TRANSPARENT);
-	 		var sunStr = sunt.hour.format("%02i") + ":" + sunt.min.format("%02i");
-	        tdc.drawText(w2, 3*height/4-20, Gfx.FONT_SYSTEM_XTINY,  sunStr, Gfx.TEXT_JUSTIFY_CENTER);
- 		}
-        
-        
-        
-        // Draw the hash marks
-        tdc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-	    drawCircles(tdc);
+       
 
         // Draw the hour. Convert it to minutes and compute the angle.
         hourHand = (((clockTime.hour % 12) * 60) + clockTime.min);
@@ -729,6 +787,10 @@ class AnalogDelegate extends Ui.WatchFaceDelegate {
     // the system will stop invoking onPartialUpdate each second, so we set the
     // partialUpdatesAllowed flag here to let the rendering methods know they
     // should not be rendering a second hand.
+    function initialize() {
+    	WatchFaceDelegate.initialize();
+    }
+    
     function onPowerBudgetExceeded(powerInfo) {
         System.println( "Average execution time: " + powerInfo.executionTimeAverage );
         System.println( "Allowed execution time: " + powerInfo.executionTimeLimit );
